@@ -140,10 +140,45 @@ def make_demo_frames():
 
 
 
+def _frames_have_overlap(frames: list) -> bool:
+    """Check if multiple DataFrames share enough columns to be meaningfully stacked."""
+    if len(frames) <= 1:
+        return True
+    col_sets = [set(df.columns.str.lower()) for df in frames]
+    # Check overlap between first frame and all others
+    base = col_sets[0]
+    for other in col_sets[1:]:
+        overlap = base & other
+        # Need at least 2 common columns (not just an ID column)
+        if len(overlap) >= 2:
+            return True
+    return False
+
+
+def _best_frame(frames: list) -> pd.DataFrame:
+    """Pick the best single DataFrame when frames cannot be meaningfully stacked.
+    Prefers: most numeric columns, then most rows."""
+    def score(df):
+        num_cols = len(df.select_dtypes(include="number").columns)
+        return (num_cols, len(df))
+    return max(frames, key=score)
+
+
 def run_pipeline(frames, log_fn, title, group_col=None, value_col=None, date_col=None):
-    log_fn(f"Stacking {len(frames)} source(s) …")
-    raw_df = pd.concat(frames, ignore_index=True)
-    log_fn(f"Combined → {raw_df.shape[0]:,} rows × {raw_df.shape[1]} cols")
+    if len(frames) > 1 and not _frames_have_overlap(frames):
+        log_fn(f"⚠️  {len(frames)} files have no common columns — analysing each separately")
+        # Generate one combined report using the best frame for analysis
+        # but stack all for the Raw Data sheet
+        best_df  = _best_frame(frames)
+        raw_df   = best_df
+        all_raw  = pd.concat(frames, ignore_index=True)
+        log_fn(f"Best file selected: {raw_df.shape[0]:,} rows × {raw_df.shape[1]} cols")
+        log_fn(f"(Raw Data sheet will show all {all_raw.shape[0]:,} rows combined)")
+    else:
+        log_fn(f"Stacking {len(frames)} source(s) …")
+        raw_df  = pd.concat(frames, ignore_index=True)
+        all_raw = raw_df
+        log_fn(f"Combined → {raw_df.shape[0]:,} rows × {raw_df.shape[1]} cols")
 
     # Detect on raw df first, then normalise col names to match post-cleaning names
     # (DataCleaner lowercases all column names, so we must do the same here)
@@ -191,14 +226,15 @@ def run_pipeline(frames, log_fn, title, group_col=None, value_col=None, date_col
     log_fn("Building Excel report …")
     with tempfile.TemporaryDirectory() as tmp:
         path = ReportGenerator(
-            analysis_results=results, raw_df=clean_df,
+            analysis_results=results,
+            raw_df=clean_df,
             report_title=title, group_col=cols["group_col"],
             value_col=cols["value_col"], output_dir=tmp,
         ).generate()
         report_bytes = open(path, "rb").read()
 
     log_fn(f"✅  Report ready  ({len(report_bytes)//1024} KB, 5 sheets)")
-    return report_bytes, clean_df, results, cols
+    return report_bytes, clean_df, results, cols, all_raw
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -412,7 +448,7 @@ if run_btn:
         detection_info = explain_detection(pd.concat(frames, ignore_index=True))
         st.session_state.update({
             "report_bytes": report_bytes, "clean_df": clean_df,
-            "results": results, "cols": cols,
+            "results": results, "cols": cols, "all_raw": all_raw,
             "sources_used": sources_used, "log_lines": log_lines,
             "detection_info": detection_info, "ran": True,
         })
@@ -433,6 +469,7 @@ if st.session_state.get("ran"):
     sources_used   = st.session_state["sources_used"]
     log_lines      = st.session_state["log_lines"]
     detection_info = st.session_state.get("detection_info", "")
+    all_raw        = st.session_state.get("all_raw", clean_df)
 
     # ── Success + download ────────────────────────────────────────────────
     c1, c2 = st.columns([3, 1])
@@ -516,10 +553,11 @@ if st.session_state.get("ran"):
             st.info("No secondary category column — cross-tab skipped.")
 
     with tab4:
-        st.markdown(f"**Cleaned dataset — {len(clean_df):,} rows × {len(clean_df.columns)} cols**")
-        st.dataframe(clean_df.head(200), use_container_width=True, height=420)
-        if len(clean_df) > 200:
-            st.caption(f"Showing first 200 of {len(clean_df):,} rows.")
+        display_df = all_raw if all_raw is not None else clean_df
+        st.markdown(f"**Raw dataset — {len(display_df):,} rows × {len(display_df.columns)} cols**")
+        st.dataframe(display_df.head(200), use_container_width=True, height=420)
+        if len(display_df) > 200:
+            st.caption(f"Showing first 200 of {len(display_df):,} rows.")
 
     with tab5:
         st.markdown("**Live pipeline execution log**")

@@ -298,6 +298,10 @@ class ReportGenerator:
     def _chart_bar(self, df: pd.DataFrame) -> io.BytesIO:
         group_col = df.columns[0]
         val_col   = "Total" if "Total" in df.columns else df.columns[1]
+        # Drop NaN values before plotting
+        df = df[[group_col, val_col]].copy()
+        df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
+        df = df.dropna(subset=[val_col]).reset_index(drop=True)
         fig, ax = plt.subplots(figsize=(7, 4))
         colors = sns.color_palette("Blues_r", len(df))
         bars = ax.barh(df[group_col], df[val_col], color=colors, edgecolor="white")
@@ -316,6 +320,22 @@ class ReportGenerator:
     def _chart_pie(self, df: pd.DataFrame) -> io.BytesIO:
         group_col = df.columns[0]
         val_col   = "Total" if "Total" in df.columns else df.columns[1]
+        # Drop NaN and zero/negative values — pie chart cannot handle them
+        plot_df = df[[group_col, val_col]].copy()
+        plot_df[val_col] = pd.to_numeric(plot_df[val_col], errors="coerce")
+        plot_df = plot_df.dropna(subset=[val_col])
+        plot_df = plot_df[plot_df[val_col] > 0].reset_index(drop=True)
+        if plot_df.empty:
+            # Return a blank placeholder image if no valid data
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ax.text(0.5, 0.5, "No data available for chart",
+                    ha="center", va="center", fontsize=12, color="gray")
+            ax.axis("off")
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+            plt.close(fig); buf.seek(0)
+            return buf
+        df = plot_df
         fig, ax = plt.subplots(figsize=(6, 5))
         colors = sns.color_palette("Set2", len(df))
         wedges, _, auto = ax.pie(
@@ -336,6 +356,10 @@ class ReportGenerator:
     def _chart_line(self, df: pd.DataFrame) -> io.BytesIO:
         month_col = df.columns[0]
         val_col   = "Total" if "Total" in df.columns else df.columns[1]
+        # Drop NaN values before plotting
+        df = df[[month_col, val_col]].copy()
+        df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
+        df = df.dropna(subset=[val_col]).reset_index(drop=True)
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(df[month_col], df[val_col], marker="o", linewidth=2.5,
                 color=f"#{MID_BLUE}", markerfacecolor=f"#{ACCENT}", markersize=7)
