@@ -439,7 +439,7 @@ if run_btn:
 
     try:
         with st.spinner("Running pipeline …"):
-            report_bytes, clean_df, results, cols = run_pipeline(
+            report_bytes, clean_df, results, cols, all_raw = run_pipeline(
                 frames, log, title,
                 group_col = ov_group.strip() or None,
                 value_col = ov_value.strip() or None,
