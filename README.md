@@ -96,54 +96,21 @@ The report appears in the `output/` folder.
 ## Data Sources Supported
 
 ### CSV
-```python
-CSVLoader("data/sales.csv")
 ```
 
 ### Excel
-```python
-ExcelLoader("data/report.xlsx", sheet_name="Sheet1")
-ExcelLoader("data/report.xlsx", sheet_name=None)   # loads ALL sheets
-```
+
 
 ### REST API
-```python
-APILoader(
-    url="https://api.example.com/sales",
-    data_key="data.results",          # dot-path into JSON
-    params={"year": 2024},
-    headers={"Authorization": "Bearer <token>"},
-)
-```
+
 
 ### SQL Database
-```python
-# SQLite (no extra install)
-DatabaseLoader("sales.db", "SELECT * FROM orders WHERE year = 2024")
 
-# PostgreSQL / MySQL via SQLAlchemy
-DatabaseLoader(
-    "postgresql://user:pass@host:5432/mydb",
-    "SELECT region, SUM(revenue) FROM sales GROUP BY region"
-)
-```
 
 ### Combining sources
-```python
-loader = (
-    MultiSourceLoader()
-    .add_source("csv_sales",  CSVLoader("data/sales.csv"))
-    .add_source("api_rates",  APILoader("https://api.example.com/fx", data_key="rates"))
-    .add_source("db_returns", DatabaseLoader("data/sales.db", "SELECT * FROM returns"))
-)
 
-df = loader.load_all()                             # vertical stack
-df = loader.load_all(merge_on="order_id", how="left")   # key join
-```
 
----
-
-## Example Output
+**## Example Output**
 
 The generated report contains 5 sheets:
 
