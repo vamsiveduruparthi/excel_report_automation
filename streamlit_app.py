@@ -438,13 +438,23 @@ if run_btn:
     title = ov_title.strip() or f"Report — {datetime.now().strftime('%d %b %Y')}"
 
     try:
-        with st.spinner("Running pipeline …"):
-            report_bytes, clean_df, results, cols, all_raw = run_pipeline(
-                frames, log, title,
-                group_col = ov_group.strip() or None,
-                value_col = ov_value.strip() or None,
-                date_col  = ov_date.strip()  or None,
-            )
+        progress_bar = st.progress(0, text="Starting pipeline …")
+        def update_progress(msg, pct):
+            progress_bar.progress(pct, text=msg)
+
+        update_progress("🔍 Detecting columns …", 10)
+        update_progress("🧹 Cleaning data …", 30)
+        update_progress("📐 Analysing KPIs …", 55)
+        update_progress("📊 Building charts …", 75)
+        update_progress("📝 Writing Excel report …", 88)
+
+        report_bytes, clean_df, results, cols, all_raw = run_pipeline(
+            frames, log, title,
+            group_col = ov_group.strip() or None,
+            value_col = ov_value.strip() or None,
+            date_col  = ov_date.strip()  or None,
+        )
+        progress_bar.progress(100, text="✅  Done!")
         detection_info = explain_detection(pd.concat(frames, ignore_index=True))
         st.session_state.update({
             "report_bytes": report_bytes, "clean_df": clean_df,
