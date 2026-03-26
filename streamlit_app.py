@@ -243,8 +243,17 @@ def run_pipeline(frames, log_fn, title, group_col=None, value_col=None, date_col
 
 def chart_bar(summary, group_col):
     fig, ax = plt.subplots(figsize=(6,4))
-    palette = sns.color_palette("Blues_r", len(summary))
-    bars = ax.barh(summary[group_col], summary["Total"], color=palette, edgecolor="white")
+    # Drop NaN and non-positive values before plotting
+    plot_df = summary[[group_col, "Total"]].copy()
+    plot_df["Total"] = pd.to_numeric(plot_df["Total"], errors="coerce")
+    plot_df = plot_df.dropna(subset=["Total"])
+    plot_df = plot_df[plot_df["Total"] > 0].reset_index(drop=True)
+    if plot_df.empty:
+        ax.text(0.5, 0.5, "No data to display", ha="center", va="center",
+                fontsize=11, color="gray", transform=ax.transAxes)
+        ax.axis("off"); fig.tight_layout(); return fig
+    palette = sns.color_palette("Blues_r", len(plot_df))
+    bars = ax.barh(plot_df[group_col], plot_df["Total"], color=palette, edgecolor="white")
     ax.set_xlabel("Total", fontsize=9)
     ax.set_title(f"Revenue by {group_col.title()}", fontsize=11, fontweight="bold")
     ax.invert_yaxis()
@@ -256,8 +265,19 @@ def chart_bar(summary, group_col):
 
 def chart_pie(summary, group_col):
     fig, ax = plt.subplots(figsize=(5,4))
-    colors = sns.color_palette("Set2", len(summary))
-    ax.pie(summary["Total"], labels=summary[group_col], autopct="%1.1f%%",
+    # Drop NaN, zero, and negative values — pie chart requires strictly positive values
+    plot_df = summary[[group_col, "Total"]].copy()
+    plot_df["Total"] = pd.to_numeric(plot_df["Total"], errors="coerce")
+    plot_df = plot_df.dropna(subset=["Total"])
+    plot_df = plot_df[plot_df["Total"] > 0].reset_index(drop=True)
+    if plot_df.empty:
+        ax.text(0.5, 0.5, "No positive values to display",
+                ha="center", va="center", fontsize=11, color="gray",
+                transform=ax.transAxes)
+        ax.axis("off")
+        fig.tight_layout(); return fig
+    colors = sns.color_palette("Set2", len(plot_df))
+    ax.pie(plot_df["Total"], labels=plot_df[group_col], autopct="%1.1f%%",
            colors=colors, startangle=140, wedgeprops=dict(linewidth=0.8, edgecolor="white"))
     ax.set_title("Share of Total", fontsize=11, fontweight="bold")
     fig.tight_layout(); return fig
@@ -265,9 +285,17 @@ def chart_pie(summary, group_col):
 
 def chart_line(trend):
     fig, ax = plt.subplots(figsize=(7,4))
-    ax.plot(trend["Month"], trend["Total"], marker="o", linewidth=2.5,
+    # Drop NaN values before plotting
+    plot_df = trend[["Month","Total"]].copy()
+    plot_df["Total"] = pd.to_numeric(plot_df["Total"], errors="coerce")
+    plot_df = plot_df.dropna(subset=["Total"]).reset_index(drop=True)
+    if plot_df.empty:
+        ax.text(0.5, 0.5, "No data to display", ha="center", va="center",
+                fontsize=11, color="gray", transform=ax.transAxes)
+        ax.axis("off"); fig.tight_layout(); return fig
+    ax.plot(plot_df["Month"], plot_df["Total"], marker="o", linewidth=2.5,
             color="#2E75B6", markerfacecolor="#E8612C", markersize=7)
-    ax.fill_between(trend["Month"], trend["Total"], alpha=0.1, color="#2E75B6")
+    ax.fill_between(plot_df["Month"], plot_df["Total"], alpha=0.1, color="#2E75B6")
     ax.set_title("Monthly Revenue Trend", fontsize=11, fontweight="bold")
     ax.set_xlabel("Month", fontsize=9); ax.set_ylabel("Revenue ($)", fontsize=9)
     plt.xticks(rotation=45, ha="right", fontsize=8)
